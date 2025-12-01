@@ -1,10 +1,11 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import { MousePosition } from '../types';
 
 export const PixelHero: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [mousePos, setMousePos] = useState<MousePosition>({ x: -1000, y: -1000 });
-  const mouseRef = useRef<MousePosition>({ x: -1000, y: -1000 }); // Ref for animation loop access
+  const mouseRef = useRef<MousePosition>({ x: -1000, y: -1000 });
 
   // Handle Mouse Movement
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -47,6 +48,7 @@ export const PixelHero: React.FC = () => {
       vy: number;
       color: string;
       scale: number;
+      phase: number; // For the floating animation
     }
 
     let pixels: Pixel[] = [];
@@ -77,6 +79,7 @@ export const PixelHero: React.FC = () => {
             vy: 0,
             color,
             scale: 1,
+            phase: Math.random() * Math.PI * 2, // Random starting point for wave
           });
         }
       }
@@ -88,8 +91,18 @@ export const PixelHero: React.FC = () => {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const mouse = mouseRef.current;
+      const time = Date.now() * 0.002; // Global time for animation
 
       pixels.forEach((p) => {
+        // --- AMBIENT FLOATING (Mobile/Idle Animation) ---
+        // Pixels gently float in a sine wave pattern around their origin
+        const floatX = Math.sin(time + p.phase) * 5; 
+        const floatY = Math.cos(time + p.phase * 0.8) * 5;
+        
+        // The "Home" target is now the origin PLUS the float offset
+        const targetX = p.originX + floatX;
+        const targetY = p.originY + floatY;
+
         // --- MOUSE INTERACTION ---
         const dx = mouse.x - p.x;
         const dy = mouse.y - p.y;
@@ -108,6 +121,7 @@ export const PixelHero: React.FC = () => {
         const directionY = forceDirectionY * force * repulsionStrength;
 
         if (dist < repulsionRadius) {
+            // If mouse is close, push away hard
             p.vx -= directionX;
             p.vy -= directionY;
             p.scale = 1 + force * 1.5; 
@@ -116,9 +130,9 @@ export const PixelHero: React.FC = () => {
         }
 
         // --- PHYSICS ---
-        // Spring back to origin
-        const homeDx = p.originX - p.x;
-        const homeDy = p.originY - p.y;
+        // Spring back to (Floating) Target
+        const homeDx = targetX - p.x;
+        const homeDy = targetY - p.y;
         
         p.vx += homeDx * returnSpeed;
         p.vy += homeDy * returnSpeed;
