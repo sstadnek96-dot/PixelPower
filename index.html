@@ -28,9 +28,9 @@
   <script type="importmap">
 {
   "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0"
+    "react/": "https://aistudiocdn.com/react@^19.2.0/"
   }
 }
 </script>
@@ -48,6 +48,9 @@
 
     <div id="root"></div>
     
+    <!-- CRITICAL: This script tells the browser to load your React app -->
+    <script type="module" src="/src/index.tsx"></script>
+
     <script>
       if (window.netlifyIdentity) {
         window.netlifyIdentity.on("init", user => {
