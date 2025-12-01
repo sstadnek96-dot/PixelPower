@@ -5,7 +5,6 @@ export const PixelHero: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [mousePos, setMousePos] = useState<MousePosition>({ x: -1000, y: -1000 });
   const mouseRef = useRef<MousePosition>({ x: -1000, y: -1000 }); // Ref for animation loop access
-  const scrollRef = useRef<number>(0); // Track scroll position
 
   // Handle Mouse Movement
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -16,19 +15,6 @@ export const PixelHero: React.FC = () => {
       const y = clientY - rect.top;
       mouseRef.current = { x, y };
       setMousePos({ x, y });
-    }
-  };
-
-  // Handle Touch Movement (Mobile)
-  const handleTouchMove = (e: React.TouchEvent) => {
-    // Prevent scrolling while touching the canvas if we want pure interaction, 
-    // but usually better to let them scroll and just track the touch.
-    const touch = e.touches[0];
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (rect) {
-      const x = touch.clientX - rect.left;
-      const y = touch.clientY - rect.top;
-      mouseRef.current = { x, y };
     }
   };
 
@@ -44,7 +30,6 @@ export const PixelHero: React.FC = () => {
     if (!ctx) return;
 
     let animationFrameId: number;
-    let lastScrollY = window.scrollY;
     
     // Pixel grid configuration
     const gap = 30; // Distance between pixels
@@ -104,16 +89,8 @@ export const PixelHero: React.FC = () => {
 
       const mouse = mouseRef.current;
 
-      // Calculate Scroll Force
-      const currentScrollY = window.scrollY;
-      const scrollDelta = currentScrollY - lastScrollY;
-      lastScrollY = currentScrollY;
-      
-      // If scrolling fast, create a global vertical wind
-      const scrollForce = scrollDelta * 0.5;
-
       pixels.forEach((p) => {
-        // --- MOUSE/TOUCH INTERACTION ---
+        // --- MOUSE INTERACTION ---
         const dx = mouse.x - p.x;
         const dy = mouse.y - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -138,15 +115,6 @@ export const PixelHero: React.FC = () => {
             p.scale = Math.max(1, p.scale - 0.05); 
         }
 
-        // --- SCROLL INTERACTION (The "Shake") ---
-        // Apply scroll force to vertical velocity
-        if (Math.abs(scrollForce) > 0.5) {
-           // Add randomness so they don't move in a perfect block
-           p.vy -= scrollForce * (0.5 + Math.random() * 0.5); 
-           // Slight horizontal jitter when scrolling fast
-           p.vx += (Math.random() - 0.5) * Math.abs(scrollForce) * 0.5;
-        }
-
         // --- PHYSICS ---
         // Spring back to origin
         const homeDx = p.originX - p.x;
@@ -167,7 +135,7 @@ export const PixelHero: React.FC = () => {
         ctx.fillStyle = p.color;
         
         // Glow effect
-        if (dist < repulsionRadius || Math.abs(scrollForce) > 5) {
+        if (dist < repulsionRadius) {
             ctx.shadowBlur = 10;
             ctx.shadowColor = p.color;
         } else {
@@ -205,12 +173,9 @@ export const PixelHero: React.FC = () => {
     <canvas
       ref={canvasRef}
       onMouseMove={handleMouseMove}
-      onTouchMove={handleTouchMove}
-      onTouchStart={handleTouchMove} // Respond immediately on tap
       onMouseLeave={handleLeave}
-      className="absolute inset-0 w-full h-full cursor-crosshair block touch-none" // touch-none helps prevents default browser gestures on the canvas if needed, though we want scroll usually.
+      className="absolute inset-0 w-full h-full cursor-crosshair block" 
       aria-label="Interactive digital particle background"
-      style={{ touchAction: 'pan-y' }} // Allow vertical scroll, but capture other touches
     />
   );
 };
