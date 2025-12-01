@@ -5,8 +5,9 @@ export const PixelHero: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [mousePos, setMousePos] = useState<MousePosition>({ x: -1000, y: -1000 });
   const mouseRef = useRef<MousePosition>({ x: -1000, y: -1000 }); // Ref for animation loop access
+  const scrollRef = useRef<number>(0); // Track scroll position
 
-  // Update mouse ref immediately for smooth animation
+  // Handle Mouse Movement
   const handleMouseMove = (e: React.MouseEvent) => {
     const { clientX, clientY } = e;
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -18,7 +19,20 @@ export const PixelHero: React.FC = () => {
     }
   };
 
-  const handleMouseLeave = () => {
+  // Handle Touch Movement (Mobile)
+  const handleTouchMove = (e: React.TouchEvent) => {
+    // Prevent scrolling while touching the canvas if we want pure interaction, 
+    // but usually better to let them scroll and just track the touch.
+    const touch = e.touches[0];
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (rect) {
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+      mouseRef.current = { x, y };
+    }
+  };
+
+  const handleLeave = () => {
     mouseRef.current = { x: -1000, y: -1000 };
     setMousePos({ x: -1000, y: -1000 });
   };
@@ -30,11 +44,12 @@ export const PixelHero: React.FC = () => {
     if (!ctx) return;
 
     let animationFrameId: number;
+    let lastScrollY = window.scrollY;
     
     // Pixel grid configuration
     const gap = 30; // Distance between pixels
     const size = 3; // Base size of pixel
-    const returnSpeed = 0.05; // How fast pixels go back to origin
+    const returnSpeed = 0.08; // How fast pixels go back to origin
     const repulsionRadius = 150; // Radius of mouse interaction
     const repulsionStrength = 30; // How hard pixels flee
 
@@ -84,22 +99,28 @@ export const PixelHero: React.FC = () => {
 
     const draw = () => {
       // Clear with trail effect for "digital" ghosting
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.4)'; // Dark background with fade
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.4)'; 
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const mouse = mouseRef.current;
 
+      // Calculate Scroll Force
+      const currentScrollY = window.scrollY;
+      const scrollDelta = currentScrollY - lastScrollY;
+      lastScrollY = currentScrollY;
+      
+      // If scrolling fast, create a global vertical wind
+      const scrollForce = scrollDelta * 0.5;
+
       pixels.forEach((p) => {
-        // Calculate distance to mouse
+        // --- MOUSE/TOUCH INTERACTION ---
         const dx = mouse.x - p.x;
         const dy = mouse.y - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        // Physics: Repulsion
         let forceDirectionX = dx / dist;
         let forceDirectionY = dy / dist;
         
-        // Avoid division by zero
         if (dist === 0) {
             forceDirectionX = 0;
             forceDirectionY = 0;
@@ -109,36 +130,44 @@ export const PixelHero: React.FC = () => {
         const directionX = forceDirectionX * force * repulsionStrength;
         const directionY = forceDirectionY * force * repulsionStrength;
 
-        // Apply force if close
         if (dist < repulsionRadius) {
-            // Move away from mouse
             p.vx -= directionX;
             p.vy -= directionY;
-            // Brighten and scale up
             p.scale = 1 + force * 1.5; 
         } else {
-            p.scale = Math.max(1, p.scale - 0.05); // Slowly shrink back
+            p.scale = Math.max(1, p.scale - 0.05); 
         }
 
-        // Physics: Spring back to origin
+        // --- SCROLL INTERACTION (The "Shake") ---
+        // Apply scroll force to vertical velocity
+        if (Math.abs(scrollForce) > 0.5) {
+           // Add randomness so they don't move in a perfect block
+           p.vy -= scrollForce * (0.5 + Math.random() * 0.5); 
+           // Slight horizontal jitter when scrolling fast
+           p.vx += (Math.random() - 0.5) * Math.abs(scrollForce) * 0.5;
+        }
+
+        // --- PHYSICS ---
+        // Spring back to origin
         const homeDx = p.originX - p.x;
         const homeDy = p.originY - p.y;
         
         p.vx += homeDx * returnSpeed;
         p.vy += homeDy * returnSpeed;
 
-        // Friction to stop oscillation
-        p.vx *= 0.8; 
-        p.vy *= 0.8;
+        // Friction
+        p.vx *= 0.85; 
+        p.vy *= 0.85;
 
         // Update position
         p.x += p.vx;
         p.y += p.vy;
 
-        // Draw Pixel
+        // --- RENDER ---
         ctx.fillStyle = p.color;
-        // Make pixels that are moving brighter
-        if (dist < repulsionRadius) {
+        
+        // Glow effect
+        if (dist < repulsionRadius || Math.abs(scrollForce) > 5) {
             ctx.shadowBlur = 10;
             ctx.shadowColor = p.color;
         } else {
@@ -154,22 +183,17 @@ export const PixelHero: React.FC = () => {
 
     const handleResize = () => {
         const dpr = window.devicePixelRatio || 1;
-        // Set actual size in memory (scaled to account for extra pixel density)
         canvas.width = window.innerWidth * dpr;
         canvas.height = window.innerHeight * dpr;
-        // Normalize coordinate system to use css pixels
         ctx.scale(dpr, dpr);
-        
-        // CSS display size
         canvas.style.width = `${window.innerWidth}px`;
         canvas.style.height = `${window.innerHeight}px`;
-        
         initPixels();
     };
 
     window.addEventListener('resize', handleResize);
-    handleResize(); // Init
-    draw(); // Start loop
+    handleResize(); 
+    draw(); 
 
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -181,9 +205,12 @@ export const PixelHero: React.FC = () => {
     <canvas
       ref={canvasRef}
       onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      className="absolute inset-0 w-full h-full cursor-crosshair block"
+      onTouchMove={handleTouchMove}
+      onTouchStart={handleTouchMove} // Respond immediately on tap
+      onMouseLeave={handleLeave}
+      className="absolute inset-0 w-full h-full cursor-crosshair block touch-none" // touch-none helps prevents default browser gestures on the canvas if needed, though we want scroll usually.
       aria-label="Interactive digital particle background"
+      style={{ touchAction: 'pan-y' }} // Allow vertical scroll, but capture other touches
     />
   );
 };
